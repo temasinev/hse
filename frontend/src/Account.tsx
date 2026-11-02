@@ -182,7 +182,6 @@ export function Login({ s, update, after }: { after: string } & Props) {
               ? "Регистрация"
               : "Вход"}
       </h1>
-      <p>Локальное демо. Используйте вымышленный номер и тестовые данные.</p>
       {verified && ticket ? (
         <ProfileForm
           register

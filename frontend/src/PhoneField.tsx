@@ -16,7 +16,6 @@ export function PhoneField({
         autoComplete="tel"
         inputMode="tel"
         placeholder="+7(XXX)-XXX-XX-XX"
-        aria-describedby="phone-format"
         required
         pattern={String.raw`\+7\(\d{3}\)-\d{3}-\d{2}-\d{2}`}
         value={value}
@@ -66,7 +65,6 @@ export function PhoneField({
           }
         }}
       />
-      <small id="phone-format">Формат: +7(XXX)-XXX-XX-XX</small>
     </label>
   );
 }

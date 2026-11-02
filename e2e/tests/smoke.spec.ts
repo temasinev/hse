@@ -6,7 +6,7 @@
 import { expect, test } from '@playwright/test'
 
 test('главная страница показывает, что бэкенд и база работают', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/#health')
 
   await expect(page.getByRole('heading', { name: 'Приложение запущено' })).toBeVisible()
   await expect(page.getByRole('status')).toHaveText('Бэкенд и база работают')

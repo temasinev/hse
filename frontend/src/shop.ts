@@ -143,9 +143,19 @@ export type State = {
 const key = "smorodina.demo.v1";
 export function read(): State {
   const raw = localStorage.getItem(key);
-  return raw
-    ? JSON.parse(raw)
-    : { items: catalog, cart: [], users: [], session: "", orders: [] };
+  if (!raw)
+    return { items: catalog, cart: [], users: [], session: "", orders: [] };
+  const s: State = JSON.parse(raw);
+  return {
+    ...s,
+    session: s.session && mask(s.session),
+    users: s.users.map((u) => ({ ...u, phone: mask(u.phone) })),
+    orders: s.orders.map((o) => ({
+      ...o,
+      owner: mask(o.owner),
+      phone: mask(o.phone),
+    })),
+  };
 }
 export function save(state: State) {
   localStorage.setItem(key, JSON.stringify(state));
@@ -153,14 +163,17 @@ export function save(state: State) {
 export const money = (n: number) => n.toLocaleString("ru-RU") + " ₽";
 export function mask(value: string) {
   let d = value.replace(/\D/g, "");
-  if (/^[78]/.test(d)) d = d.slice(1);
+  if (value.startsWith("+7") || (d.length === 11 && /^[78]/.test(d)))
+    d = d.slice(1);
   d = d.slice(0, 10);
   return (
     "+7" +
-    (d ? " (" + d.slice(0, 3) : "") +
-    (d.length >= 3 ? ") " : "") +
+    (d ? "(" + d.slice(0, 3) : "") +
+    (d.length > 3 ? ")-" : "") +
     d.slice(3, 6) +
     (d.length > 6 ? "-" + d.slice(6, 8) : "") +
     (d.length > 8 ? "-" + d.slice(8) : "")
   );
 }
+export const completePhone = (value: string) =>
+  /^\+7\(\d{3}\)-\d{3}-\d{2}-\d{2}$/.test(value);

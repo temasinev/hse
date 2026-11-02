@@ -1,5 +1,5 @@
 /** Витрина, навигация, корзина и личный кабинет демонстрационного магазина. */
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Health from "./App";
 import { Art } from "./Art";
 import { Login, ProfileForm } from "./Account";
@@ -106,7 +106,10 @@ function Item({ p, s, update }: { p: Product } & Props) {
     [detail, D] = useState(false),
     [added, A] = useState(false);
   const related = s.items.filter(
-    (x) => x.id !== p.id && (x.color === p.color || x.type === p.type),
+    (x) => x.id !== p.id && x.type === p.type && x.available,
+  );
+  const matching = s.items.filter(
+    (x) => x.type !== p.type && x.color === p.color && x.available,
   );
   return (
     <>
@@ -178,12 +181,23 @@ function Item({ p, s, update }: { p: Product } & Props) {
           )}
         </section>
       </div>
-      <h2>В пару к украшению</h2>
-      <Cards items={related.slice(0, 4)} />
+      {matching.length > 0 && (
+        <>
+          <h2>Соберите комплект</h2>
+          <Cards items={matching.slice(0, 4)} />
+        </>
+      )}
+      {related.length > 0 && (
+        <>
+          <h2>Похожие украшения</h2>
+          <Cards items={related.slice(0, 4)} />
+        </>
+      )}
     </>
   );
 }
 export default function Store() {
+  const logoutDialog = useRef<HTMLDialogElement>(null);
   const [s, set] = useState(read),
     [hash, H] = useState(location.hash.slice(1)),
     [notice, N] = useState("");
@@ -328,14 +342,27 @@ export default function Store() {
           />
           {notice}
           <hr />
-          <button
-            onClick={() => {
-              if (confirm("Вы уверены, что хотите выйти?"))
-                update({ ...s, session: "" });
-            }}
-          >
+          <button onClick={() => logoutDialog.current?.showModal()}>
             Выйти из аккаунта
           </button>{" "}
+          <dialog ref={logoutDialog} aria-labelledby="logout-title">
+            <h2 id="logout-title">Вы уверены, что хотите выйти?</h2>
+            <form method="dialog">
+              <button className="quiet" autoFocus>
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  logoutDialog.current?.close();
+                  update({ ...s, session: "" });
+                  N("");
+                }}
+              >
+                Выйти
+              </button>
+            </form>
+          </dialog>
           <button
             className="quiet"
             onClick={() => {
@@ -352,6 +379,15 @@ export default function Store() {
           </button>
         </section>
         <h2>Ваши заказы</h2>
+        {s.orders
+          .filter(
+            (o) => o.owner === user.phone && o.status === "Готов к выдаче",
+          )
+          .map((o) => (
+            <p role="status" key={o.id}>
+              Заказ {o.id} готов к выдаче. Ваш демо-ПВЗ: {o.pickup}
+            </p>
+          ))}
         {s.orders
           .filter((o) => o.owner === user.phone)
           .map((o) => (

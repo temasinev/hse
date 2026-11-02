@@ -1,6 +1,7 @@
 /** Локальная демонстрация входа и редактирования профиля. */
-import { useEffect, useState } from "react";
-import { mask, sms } from "./shop";
+import { useEffect, useRef, useState } from "react";
+import { completePhone, mask, sms } from "./shop";
+import { PhoneField } from "./PhoneField";
 import type { State, User } from "./shop";
 export type Props = { s: State; update: (next: State) => void };
 export function ProfileForm({
@@ -13,6 +14,8 @@ export function ProfileForm({
   onSave: (u: User) => void;
 }) {
   const [photo, setPhoto] = useState(user.photo);
+  const [name, setName] = useState(user.name),
+    [consent, setConsent] = useState(false);
   return (
     <form
       onSubmit={(e) => {
@@ -29,7 +32,13 @@ export function ProfileForm({
     >
       <label>
         Имя
-        <input name="name" required pattern=".*\S.*" defaultValue={user.name} />
+        <input
+          name="name"
+          required
+          autoComplete="given-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
       </label>
       <label>
         Email
@@ -65,13 +74,19 @@ export function ProfileForm({
       {photo && <img width="68" alt="Аватар" src={photo} />}
       {register && (
         <label>
-          <input required type="checkbox" /> Принимаю{" "}
+          <input
+            required
+            type="checkbox"
+            checked={consent}
+            onChange={(e) => setConsent(e.target.checked)}
+          />{" "}
+          Принимаю{" "}
           <a href="#terms" target="_blank">
             соглашение и политику обработки данных
           </a>
         </label>
       )}
-      <button>
+      <button disabled={!name.trim() || (register && !consent)}>
         {register ? "Завершить регистрацию" : "Сохранить профиль"}
       </button>
     </form>
@@ -86,14 +101,18 @@ type Ticket = {
   register: boolean;
 };
 export function Login({ s, update, after }: { after: string } & Props) {
-  const [ticket, T] = useState<Ticket | null>(() =>
-      JSON.parse(sessionStorage.getItem("berry.ticket") || "null"),
-    ),
-    [phone, P] = useState("+7"),
+  const digits = useRef<(HTMLInputElement | null)[]>([]);
+  const [ticket, T] = useState<Ticket | null>(() => {
+      const stored: Ticket | null = JSON.parse(
+        sessionStorage.getItem("berry.ticket") || "null",
+      );
+      return stored && { ...stored, phone: mask(stored.phone) };
+    }),
+    [phone, P] = useState(""),
     [register, R] = useState(false),
     [verified, V] = useState(false),
     [err, E] = useState(""),
-    [input, I] = useState(""),
+    [input, I] = useState<string[]>(Array(6).fill("")),
     [now, N] = useState(Date.now);
   useEffect(() => {
     const t = setInterval(() => N(Date.now()), 500);
@@ -112,7 +131,7 @@ export function Login({ s, update, after }: { after: string } & Props) {
       blocked: 0,
       errors: 0,
     });
-    I("");
+    I(Array(6).fill(""));
     E("");
   }
   function done(u: User) {
@@ -126,15 +145,20 @@ export function Login({ s, update, after }: { after: string } & Props) {
   }
   function verify() {
     if (!ticket || ticket.blocked > Date.now()) return;
-    if (input !== ticket.code) {
+    if (input.join("") !== ticket.code) {
       const errors = ticket.errors + 1;
       ticketSet({
         ...ticket,
         errors: errors === 3 ? 0 : errors,
         blocked: errors === 3 ? Date.now() + 60000 : 0,
       });
-      I("");
-      E("Неверный код. Попробуйте снова");
+      I(Array(6).fill(""));
+      E(
+        errors === 3
+          ? "Превышен лимит попыток. Ввод откроется через минуту."
+          : "Неверный код. Попробуйте снова",
+      );
+      digits.current[0]?.focus();
       return;
     }
     if (ticket.register) V(true);
@@ -181,18 +205,47 @@ export function Login({ s, update, after }: { after: string } & Props) {
           <p>
             {ticket.phone} · Демо-код <b>{ticket.code}</b>
           </p>
-          <label>
-            Шестизначный код
-            <input
-              value={input}
-              onChange={(e) => I(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              inputMode="numeric"
-              required
-              pattern="[0-9]{6}"
-              disabled={ticket.blocked > now}
-            />
-          </label>
-          <button disabled={ticket.blocked > now}>
+          <fieldset className="otp">
+            <legend>Шестизначный код</legend>
+            {input.map((digit, i) => (
+              <input
+                key={i}
+                ref={(el) => {
+                  digits.current[i] = el;
+                }}
+                aria-label={`Цифра ${i + 1} из 6`}
+                value={digit}
+                inputMode="numeric"
+                autoComplete={i === 0 ? "one-time-code" : "off"}
+                required
+                pattern="[0-9]"
+                disabled={ticket.blocked > now}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => {
+                  const part = e.target.value
+                    .replace(/\D/g, "")
+                    .slice(0, 6 - i);
+                  const next = [...input];
+                  next[i] = "";
+                  [...part].forEach((v, j) => {
+                    next[i + j] = v;
+                  });
+                  I(next);
+                  E("");
+                  if (part)
+                    digits.current[Math.min(5, i + part.length)]?.focus();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Backspace" && !digit && i > 0) {
+                    e.preventDefault();
+                    I(input.map((v, j) => (j === i - 1 ? "" : v)));
+                    digits.current[i - 1]?.focus();
+                  }
+                }}
+              />
+            ))}
+          </fieldset>
+          <button disabled={ticket.blocked > now || input.some((d) => !d)}>
             {ticket.blocked > now
               ? "Ввод заблокирован · " +
                 Math.ceil((ticket.blocked - now) / 1000) +
@@ -230,17 +283,16 @@ export function Login({ s, update, after }: { after: string } & Props) {
             issue(phone, register);
           }}
         >
-          <label>
-            Телефон
-            <input
-              type="tel"
-              required
-              minLength={18}
-              value={phone}
-              onChange={(e) => P(mask(e.target.value))}
-            />
-          </label>
-          <button>Продолжить</button>
+          <PhoneField
+            value={phone}
+            onChange={(v) => {
+              P(v);
+              E("");
+            }}
+          />
+          <button disabled={!completePhone(phone)}>
+            {register ? "Продолжить" : "Войти"}
+          </button>
           <button
             className="quiet"
             type="button"

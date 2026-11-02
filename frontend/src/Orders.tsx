@@ -1,11 +1,12 @@
 /** Оформление, подтверждение и демонстрационная мастерская Елены. */
 import { useRef, useState } from "react";
 import type { Props } from "./Account";
+import { PhoneField } from "./PhoneField";
 import type { Details, Order, Product } from "./shop";
 import {
   colors,
   delivery,
-  mask,
+  completePhone,
   money,
   notifications,
   payments,
@@ -36,6 +37,7 @@ export function Receipt({ o }: { o: Order }) {
 export function Checkout({ s, update }: Props) {
   const user = s.users.find((u) => u.phone === s.session)!,
     [phone, P] = useState(user.phone),
+    [step, setStep] = useState(0),
     [review, R] = useState<Details | null>(null),
     [error, E] = useState(""),
     lock = useRef(false);
@@ -73,58 +75,91 @@ export function Checkout({ s, update }: Props) {
   return (
     <section className="panel">
       <small>КОРЗИНА / ОФОРМЛЕНИЕ</small>
-      <h1>{review ? "Проверьте заказ" : "Оформление"}</h1>
+      <h1>
+        {review
+          ? "Проверьте заказ"
+          : ["Получатель", "Пункт выдачи", "Способ оплаты"][step]}
+      </h1>
+      <p>
+        Шаг {review ? 4 : step + 1} из 4 · Контакты → Доставка → Оплата →
+        Проверка
+      </p>
       <form
         hidden={!!review}
         onSubmit={(e) => {
           e.preventDefault();
+          if (step < 2) {
+            setStep(step + 1);
+            return;
+          }
           R(Object.fromEntries(new FormData(e.currentTarget)) as Details);
         }}
       >
-        <label>
-          Получатель
-          <input name="name" required defaultValue={user.name} />
-        </label>
-        <label>
-          Телефон
-          <input
-            name="phone"
-            value={phone}
-            minLength={18}
-            required
-            onChange={(e) => P(mask(e.target.value))}
-          />
-        </label>
-        <label>
-          Как связаться
-          <select name="channel">
-            {["Звонок", "ВКонтакте", "Telegram", "Instagram", "MAX"].map(
-              option,
-            )}
-          </select>
-        </label>
-        <label>
-          Дополнительный контакт
-          <input name="contact" />
-        </label>
-        <label>
-          Комментарий
-          <textarea name="note" />
-        </label>
-        <label>
-          Тестовый пункт выдачи
-          <select name="pickup" required defaultValue="">
-            <option value="" disabled>
-              Выберите адрес
-            </option>
-            {delivery.points().map(option)}
-          </select>
-        </label>
-        <label>
-          Демооплата
-          <select name="method">{["Карта", "СБП"].map(option)}</select>
-        </label>
-        <button>Проверить заказ</button>
+        <div hidden={step !== 0}>
+          <label>
+            Получатель
+            <input
+              name="name"
+              required
+              pattern=".*\S.*"
+              defaultValue={user.name}
+            />
+          </label>
+          <PhoneField value={phone} onChange={P} />
+          <label>
+            Как связаться
+            <select name="channel">
+              {["Звонок", "ВКонтакте", "Telegram", "Instagram", "MAX"].map(
+                option,
+              )}
+            </select>
+          </label>
+          <label>
+            Дополнительный контакт
+            <input name="contact" />
+          </label>
+          <label>
+            Комментарий
+            <textarea name="note" />
+          </label>
+        </div>
+        <div hidden={step !== 1}>
+          <p>
+            Выберите удобный адрес. Все пункты ниже вымышлены для демонстрации.
+          </p>
+          <label>
+            Тестовый пункт выдачи
+            <select name="pickup" required={step === 1} defaultValue="">
+              <option value="" disabled>
+                Выберите адрес
+              </option>
+              {delivery.points().map(option)}
+            </select>
+          </label>
+        </div>
+        <div hidden={step !== 2}>
+          <p>Карта или СБП. Реального списания в демоверсии нет.</p>
+          <label>
+            Демооплата
+            <select name="method">{["Карта", "СБП"].map(option)}</select>
+          </label>
+        </div>
+        {step > 0 && (
+          <button
+            className="quiet"
+            type="button"
+            onClick={() => setStep(step - 1)}
+          >
+            Назад
+          </button>
+        )}
+        <button disabled={!completePhone(phone)}>
+          {
+            ["Выбрать пункт выдачи", "Перейти к оплате", "Проверить заказ"][
+              step
+            ]
+          }
+        </button>
       </form>
       {review && (
         <>
@@ -275,7 +310,27 @@ export function Admin({ s, update }: Props) {
       </form>
       <h2>Заказы · журнал демоуведомлений ВКонтакте</h2>
       {s.orders.length ? (
-        s.orders.map((o) => <Receipt key={o.id} o={o} />)
+        s.orders.map((o) => (
+          <section key={o.id}>
+            <Receipt o={o} />
+            {o.status !== "Готов к выдаче" && (
+              <button
+                onClick={() =>
+                  update({
+                    ...s,
+                    orders: s.orders.map((order) =>
+                      order.id === o.id
+                        ? { ...order, status: "Готов к выдаче" }
+                        : order,
+                    ),
+                  })
+                }
+              >
+                Отметить готовность к выдаче
+              </button>
+            )}
+          </section>
+        ))
       ) : (
         <p>Заказов пока нет.</p>
       )}

@@ -293,3 +293,19 @@ hr {
     margin-block: 10px 18px;
   }
 }
+.otp {
+  border: 0;
+  padding: 0;
+  display: flex;
+  gap: 6px;
+  margin: 16px 0;
+}
+.otp legend {
+  margin-bottom: 6px;
+}
+.otp input:not([type="checkbox"]) {
+  width: min(12%, 48px);
+  padding: 10px 0;
+  text-align: center;
+  font-size: 21px;
+}
